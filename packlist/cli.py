@@ -167,11 +167,19 @@ def cmd_move(a):
             raise SystemExit(f"'{a.item}' must match exactly one item (it matches: {names}).")
         person, old_section, item = rows[0]
         targets = [s for s in person["sections"] if a.to.lower() in s["name"].lower()]
+        if not targets and a.new_section:
+            targets = [{"name": a.to, "items": []}]
+            if a.new_section == "first":
+                person["sections"].insert(0, targets[0])
+            else:
+                person["sections"].append(targets[0])
         if len(targets) != 1:
             names = ", ".join(s["name"] for s in targets) or "nothing"
             raise SystemExit(f"'{a.to}' must match exactly one section of {person['name']} (it matches: {names}).")
         target = targets[0]
         old_section["items"].remove(item)
+        if a.decided:
+            item.pop("ask", None)
         pos = len(target["items"])
         if a.before:
             hits = [i for i, it in enumerate(target["items"]) if a.before.lower() in it["name"].lower()]
@@ -224,6 +232,8 @@ def main(argv=None):
     p.add_argument("item", help="words matching exactly one item")
     p.add_argument("--to", required=True, help="words matching the target section")
     p.add_argument("--before", help="place it before the first item matching these words")
+    p.add_argument("--new-section", choices=["first", "last"], help="create the section if it doesn't exist")
+    p.add_argument("--decided", action="store_true", help="it's no longer a decide-for-this-trip item")
     p.add_argument("--trip"); p.add_argument("--person"); p.set_defaults(fn=cmd_move)
 
     a = ap.parse_args(argv)

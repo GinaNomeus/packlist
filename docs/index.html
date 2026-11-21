@@ -63,6 +63,10 @@
   .setup input { display: block; width: 100%; font-size: 17px; padding: 10px; margin-top: 4px; border: 1px solid var(--line); border-radius: 8px; }
   .setup button, .foot button { margin-top: 16px; width: 100%; padding: 12px; font-size: 17px; border: 0; border-radius: 10px; background: var(--accent); color: #fff; }
   .foot button { background: none; color: var(--muted); border: 1px solid var(--line); }
+  .sec-done { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 12px 14px;
+              border: 1px solid var(--line); border-radius: 12px; background: var(--accent-soft); color: var(--accent);
+              font-size: 15px; font-weight: 600; text-align: left; }
+  .sec-done small { font-weight: 400; white-space: nowrap; margin-left: 8px; }
   #status { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 14px);
             background: var(--ink); color: #fff; border-radius: 18px; padding: 7px 14px; font-size: 14px; display: none; }
   #status.show { display: block; }
@@ -89,7 +93,8 @@ const store = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 let cfg = load(LS.cfg, null);           // {repo: "owner/name", token: "..."}
 let trip = load(LS.trip, null), sha = load(LS.sha, null);
 let queue = load(LS.queue, []);
-let view = Object.assign({tab: 0, onlyLeft: false}, load(LS.view, {}));
+let view = Object.assign({tab: 0, onlyLeft: false, open: {}}, load(LS.view, {}));
+view.open = view.open || {};
 let online = true, busy = false, paused = false, tripPath = null;
 
 const $ = id => document.getElementById(id);
@@ -247,8 +252,17 @@ function render() {
     const items = s.items.filter(it => !view.onlyLeft || (it.status || "todo") === "todo");
     if (!items.length) continue;
     const anyLeft = s.items.some(it => (it.status || "todo") === "todo");
+    const key = person.name + "|" + s.name;
+    // A finished section folds into one line; tap it to look inside.
+    if (!anyLeft && !view.open[key]) {
+      const n = s.items.filter(it => it.status === "packed").length;
+      html += `<section><button class="sec-done" data-open="${esc(key)}"><span>✓ ${esc(s.name)}</span>` +
+        `<small>${n} packed ›</small></button></section>`;
+      continue;
+    }
     html += `<section><div class="sec-head"><h2>${esc(s.name)}</h2>` +
-      (anyLeft ? `<button data-sec="${esc(s.name)}">All packed</button>` : "") + `</div><div class="card">`;
+      (anyLeft ? `<button data-sec="${esc(s.name)}">All packed</button>`
+               : `<button data-close="${esc(key)}">Fold ⌃</button>`) + `</div><div class="card">`;
     for (const it of items) {
       const st = ["packed", "skipped"].includes(it.status) ? it.status : "todo";
       const tags = (it.ask && st === "todo" ? '<span class="tag ask">decide</span>' : "") +
@@ -274,6 +288,8 @@ document.addEventListener("click", e => {
   if (!trip || t.id === "connect") return;
   if (t.dataset.tab !== undefined) { view.tab = +t.dataset.tab; saveLocal(); render(); scrollTo(0, 0); return; }
   if (t.id === "leftBtn") { view.onlyLeft = !view.onlyLeft; saveLocal(); render(); return; }
+  if (t.dataset.open !== undefined) { view.open[t.dataset.open] = true; saveLocal(); render(); return; }
+  if (t.dataset.close !== undefined) { delete view.open[t.dataset.close]; saveLocal(); render(); return; }
   if (t.dataset.sec !== undefined) {
     if (confirm(`Mark everything left in "${t.dataset.sec}" as packed?`))
       act({section: [trip.people[view.tab].name, t.dataset.sec], status: "packed"});
