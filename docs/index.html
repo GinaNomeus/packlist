@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Packing">
+<meta name="theme-color" content="#f7f4ef">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.github.com; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; manifest-src 'self'; worker-src 'self'">
+<title>Packing</title>
+<style>
+  :root {
+    --bg: #f7f4ef; --card: #fff; --ink: #1f1d1a; --muted: #8a847b; --line: #e8e2d8;
+    --accent: #2f6f5e; --accent-soft: #e3efe9; --ask: #b5761b; --ask-soft: #fbf0de; --new: #4a5fa8;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font: 17px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: var(--bg); color: var(--ink); padding-bottom: env(safe-area-inset-bottom); }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg);
+           padding: calc(env(safe-area-inset-top) + 10px) 16px 8px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+  .meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .tabs { display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; }
+  .tabs button, .chip { border: 1px solid var(--line); background: var(--card); border-radius: 18px;
+           padding: 7px 14px; font-size: 15px; color: var(--ink); white-space: nowrap; }
+  .tabs button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .tools { display: flex; gap: 6px; margin-top: 8px; }
+  .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  main { padding: 8px 12px 80px; }
+  section { margin: 14px 0; }
+  .sec-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 6px; }
+  .sec-head h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0; }
+  .sec-head button { border: 0; background: none; color: var(--accent); font-size: 14px; padding: 6px; }
+  .card { background: var(--card); border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+  .item { display: flex; align-items: flex-start; gap: 12px; padding: 13px 12px; border-top: 1px solid var(--line); }
+  .item:first-child { border-top: 0; }
+  .box { flex: 0 0 28px; height: 28px; border-radius: 8px; border: 2px solid #c9c1b4; display: grid; place-items: center;
+         font-size: 18px; color: #fff; margin-top: -2px; }
+  .packed .box { background: var(--accent); border-color: var(--accent); }
+  .skipped .box { background: #d8d2c8; border-color: #d8d2c8; }
+  .txt { flex: 1; min-width: 0; }
+  .packed .name, .skipped .name { color: var(--muted); text-decoration: line-through; }
+  .note, .subs { font-size: 14px; color: var(--muted); margin-top: 2px; }
+  .tag { display: inline-block; font-size: 12px; border-radius: 6px; padding: 1px 6px; margin-right: 4px; vertical-align: 1px; }
+  .tag.ask { background: var(--ask-soft); color: var(--ask); }
+  .tag.new { background: #e8ecf8; color: var(--new); }
+  .tag.skip { background: #eee9e1; color: var(--muted); }
+  .actions { display: flex; gap: 6px; margin-top: 8px; }
+  .actions button { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 6px 10px; font-size: 14px; }
+  .more { flex: 0 0 auto; border: 0; background: none; color: var(--muted); font-size: 20px; padding: 0 4px; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 10px; }
+  .leftout li { margin: 6px 0; }
+  .setup { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-top: 16px; }
+  .setup h2 { font-size: 18px; margin: 0 0 8px; }
+  .setup p { color: var(--muted); font-size: 15px; }
+  .setup .problem { color: #a33; }
+  .setup label { display: block; font-size: 14px; color: var(--muted); margin: 12px 0 0; }
+  .setup input { display: block; width: 100%; font-size: 17px; padding: 10px; margin-top: 4px; border: 1px solid var(--line); border-radius: 8px; }
+  .setup button, .foot button { margin-top: 16px; width: 100%; padding: 12px; font-size: 17px; border: 0; border-radius: 10px; background: var(--accent); color: #fff; }
+  .foot button { background: none; color: var(--muted); border: 1px solid var(--line); }
+  #status { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 14px);
+            background: var(--ink); color: #fff; border-radius: 18px; padding: 7px 14px; font-size: 14px; display: none; }
+  #status.show { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Packing</h1>
+  <div class="bar"><div id="bar"></div></div>
+  <div class="meta"><span id="count"></span><span id="sync"></span></div>
+  <div class="tabs"><span id="tabs" style="display:contents"></span><button class="chip" id="leftBtn">Only left</button></div>
+</header>
+<main id="main"><div class="empty">Loading…</div></main>
+<div id="status"></div>
+
+<script>
+// Packing checklist. The app is public; the data is not: trips live in a private
+// GitHub repository, read and written with a key that is kept only on this phone.
+const LS = {cfg: "pack.cfg", trip: "pack.trip", sha: "pack.sha", queue: "pack.queue", view: "pack.view"};
+const API = "https://api.github.com";
+const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const store = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+
+let cfg = load(LS.cfg, null);           // {repo: "owner/name", token: "..."}
+let trip = load(LS.trip, null), sha = load(LS.sha, null);
+let queue = load(LS.queue, []);
+let view = Object.assign({tab: 0, onlyLeft: false}, load(LS.view, {}));
+let online = true, busy = false, paused = false, tripPath = null;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function saveLocal() { store(LS.trip, trip); store(LS.sha, sha); store(LS.queue, queue); store(LS.view, view); }
+function toast(msg) { const s = $("status"); s.textContent = msg; s.classList.add("show");
+  clearTimeout(toast.t); toast.t = setTimeout(() => s.classList.remove("show"), 1800); }
+
+// ---- GitHub ----------------------------------------------------------------
+const b64decode = b => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\n/g, "")), c => c.charCodeAt(0)));
+const b64encode = s => { let bin = ""; new TextEncoder().encode(s).forEach(b => bin += String.fromCharCode(b)); return btoa(bin); };
+
+async function gh(path, opts = {}) {
+  const r = await fetch(`${API}/repos/${cfg.repo}/contents/${path}`, {
+    ...opts, cache: "no-store",
+    headers: {"Authorization": `Bearer ${cfg.token}`, "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28"}});
+  if (r.status === 401 || r.status === 403 || r.status === 404) { const e = new Error("access"); e.status = r.status; throw e; }
+  if (r.status === 409 || r.status === 422) throw new Error("conflict");
+  if (!r.ok) throw new Error("http " + r.status);
+  return r.json();
+}
+async function readFile(path) { const f = await gh(path); return {data: JSON.parse(b64decode(f.content)), sha: f.sha}; }
+async function writeFile(path, data, prevSha, message) {
+  const body = {message, content: b64encode(JSON.stringify(data, null, 1) + "\n"), sha: prevSha};
+  const r = await gh(path, {method: "PUT", body: JSON.stringify(body)});
+  return r.content.sha;
+}
+async function findTripPath() {
+  if (!tripPath) tripPath = `trips/${(await readFile("current.json")).data.trip}.json`;
+  return tripPath;
+}
+
+// ---- changes ---------------------------------------------------------------
+function applyOp(t, op) {
+  for (const p of t.people) for (const s of p.sections) for (const it of s.items) {
+    const hit = op.item === it.id ||
+      (op.section && op.section[0] === p.name && op.section[1] === s.name && (it.status || "todo") === "todo");
+    if (!hit) continue;
+    it.status = op.status;
+    if (op.status === "todo") delete it.at; else it.at = op.at;
+  }
+}
+function act(op) { op.at = new Date().toISOString().slice(0, 19) + "+00:00";
+  applyOp(trip, op); queue.push(op); saveLocal(); render(); sync(); }
+
+function describe(ops) {
+  const names = [];
+  for (const op of ops) {
+    if (op.section) names.push(op.section[1]);
+    else for (const p of trip.people) for (const s of p.sections) for (const it of s.items) if (it.id === op.item) names.push(it.name);
+  }
+  const s = names.slice(0, 3).join(", ") + (names.length > 3 ? ` +${names.length - 3}` : "");
+  return `Phone: ${ops[ops.length - 1].status} ${s}`;
+}
+
+// Send waiting taps (on top of the newest version, so nothing from Claude is lost),
+// or just fetch the newest version.
+async function sync() {
+  if (busy || paused || !cfg) return;
+  busy = true;
+  try {
+    const path = await findTripPath();
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const latest = await readFile(path);
+      if (!queue.length) {
+        if (latest.sha !== sha) { trip = latest.data; sha = latest.sha; }
+        break;
+      }
+      const batch = queue.slice(), t = latest.data;
+      batch.forEach(op => applyOp(t, op));
+      t.rev = (t.rev || 0) + 1; t.updated_at = new Date().toISOString().slice(0, 19) + "+00:00";
+      try {
+        sha = await writeFile(path, t, latest.sha, describe(batch));
+        trip = t; queue = queue.slice(batch.length);
+        queue.forEach(op => applyOp(trip, op));
+        if (!queue.length) break;
+      } catch (e) { if (e.message !== "conflict") throw e; }
+    }
+    online = true;
+  } catch (e) {
+    online = false;
+    if (e.message === "access") { busy = false; return showSetup(e.status === 404
+      ? "The data repository was not found with this key." : "The GitHub key was refused (wrong or expired)."); }
+  }
+  busy = false; saveLocal(); render();
+}
+
+// ---- setup -----------------------------------------------------------------
+function showSetup(problem) {
+  paused = true;  // no background syncing while the form is open
+  const repo = new URLSearchParams(location.hash.slice(1)).get("repo") || cfg?.repo || "";
+  $("main").innerHTML = `<div class="setup">
+    <h2>Connect your packing data</h2>
+    ${problem ? `<p class="problem">${esc(problem)}</p>` : ""}
+    <p>Your lists live in a private GitHub repository. This phone needs its name and a GitHub key that can only read and write that one repository. Both stay on this phone.</p>
+    <label>Data repository<input id="repo" placeholder="owner/name" value="${esc(repo)}" autocapitalize="off" autocorrect="off"></label>
+    <label>GitHub key<input id="token" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off"></label>
+    <button id="connect">Connect</button></div>`;
+  $("connect").onclick = async () => {
+    cfg = {repo: $("repo").value.trim(), token: $("token").value.trim()};
+    tripPath = null; trip = null; sha = null; paused = false;
+    store(LS.cfg, cfg); $("main").innerHTML = '<div class="empty">Connecting…</div>';
+    await sync(); if (online && trip) toast("Connected ✓");
+  };
+}
+
+// ---- screen ----------------------------------------------------------------
+function counts(people) {
+  const c = {todo: 0, packed: 0, skipped: 0};
+  for (const p of people) for (const s of p.sections) for (const it of s.items) c[it.status || "todo"]++;
+  return c;
+}
+function renderSync() {
+  $("sync").textContent = queue.length ? `${queue.length} change${queue.length > 1 ? "s" : ""} waiting${online ? "…" : " · offline"}`
+                         : online ? "saved ✓" : "offline";
+}
+
+function render() {
+  renderSync();
+  if (!trip) return;
+  $("title").textContent = trip.title;
+  const tabs = trip.people.map(p => p.name).concat(trip.left_out && trip.left_out.length ? ["Left out"] : []);
+  if (view.tab >= tabs.length) view.tab = 0;
+  $("tabs").innerHTML = tabs.map((t, i) => {
+    let label = esc(t);
+    if (i < trip.people.length) label += ` <small>${counts([trip.people[i]]).todo}</small>`;
+    return `<button class="${i === view.tab ? "on" : ""}" data-tab="${i}">${label}</button>`;
+  }).join("");
+  const all = counts(trip.people), total = all.todo + all.packed + all.skipped;
+  $("bar").style.width = total ? ((all.packed + all.skipped) / total * 100) + "%" : "0";
+  $("count").textContent = `${all.packed} packed · ${all.todo} left`;
+  $("leftBtn").classList.toggle("on", view.onlyLeft);
+
+  if (view.tab >= trip.people.length) {
+    $("main").innerHTML = '<section><div class="sec-head"><h2>Not on this trip</h2></div><div class="card" style="padding:4px 16px">' +
+      '<ul class="leftout">' + trip.left_out.map(l => `<li>${esc(l)}</li>`).join("") + "</ul></div></section>" +
+      '<p class="foot"><button id="setupBtn">Data connection</button></p>';
+    return;
+  }
+  const person = trip.people[view.tab];
+  let html = "";
+  for (const s of person.sections) {
+    const items = s.items.filter(it => !view.onlyLeft || (it.status || "todo") === "todo");
+    if (!items.length) continue;
+    const anyLeft = s.items.some(it => (it.status || "todo") === "todo");
+    html += `<section><div class="sec-head"><h2>${esc(s.name)}</h2>` +
+      (anyLeft ? `<button data-sec="${esc(s.name)}">All packed</button>` : "") + `</div><div class="card">`;
+    for (const it of items) {
+      const st = ["packed", "skipped"].includes(it.status) ? it.status : "todo";
+      const tags = (it.ask && st === "todo" ? '<span class="tag ask">decide</span>' : "") +
+                   (it.new ? '<span class="tag new">new</span>' : "") +
+                   (st === "skipped" ? '<span class="tag skip">not this time</span>' : "");
+      const subs = it.sub ? `<div class="subs">${it.sub.map(x => esc(x.name)).join(" · ")}</div>` : "";
+      const note = it.note ? `<div class="note">${esc(it.note)}</div>` : "";
+      const actions = it.ask && st === "todo"
+        ? `<div class="actions"><button data-act="packed" data-id="${esc(it.id)}">Packed</button><button data-act="skipped" data-id="${esc(it.id)}">Not this time</button></div>` : "";
+      html += `<div class="item ${st}" data-id="${esc(it.id)}"><div class="box">${st === "packed" ? "✓" : st === "skipped" ? "–" : ""}</div>` +
+        `<div class="txt"><div class="name">${tags}${esc(it.name)}</div>${note}${subs}${actions}</div>` +
+        (st === "todo" && !it.ask ? `<button class="more" data-skip="${esc(it.id)}" aria-label="Not this time">⋯</button>` : "") + `</div>`;
+    }
+    html += "</div></section>";
+  }
+  $("main").innerHTML = html || '<div class="empty">Everything is packed 🎉</div>';
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("button, .item");
+  if (!t) return;
+  if (t.id === "setupBtn") return showSetup();
+  if (!trip || t.id === "connect") return;
+  if (t.dataset.tab !== undefined) { view.tab = +t.dataset.tab; saveLocal(); render(); scrollTo(0, 0); return; }
+  if (t.id === "leftBtn") { view.onlyLeft = !view.onlyLeft; saveLocal(); render(); return; }
+  if (t.dataset.sec !== undefined) {
+    if (confirm(`Mark everything left in "${t.dataset.sec}" as packed?`))
+      act({section: [trip.people[view.tab].name, t.dataset.sec], status: "packed"});
+    return;
+  }
+  if (t.dataset.act) { act({item: t.dataset.id, status: t.dataset.act}); return; }
+  if (t.dataset.skip) {
+    if (confirm("Not needed on this trip?")) { act({item: t.dataset.skip, status: "skipped"}); toast("Marked: not this time"); }
+    return;
+  }
+  if (t.classList.contains("item")) {
+    const id = t.dataset.id;
+    let cur = "todo";
+    for (const p of trip.people) for (const s of p.sections) for (const it of s.items) if (it.id === id) cur = it.status || "todo";
+    act({item: id, status: cur === "todo" ? "packed" : "todo"});
+  }
+});
+
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+if (!cfg) showSetup(); else { render(); sync(); }
+setInterval(() => { if (!document.hidden) sync(); }, 8000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(); });
+addEventListener("online", sync);
+</script>
+</body>
+</html>

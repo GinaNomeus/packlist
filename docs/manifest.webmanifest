@@ -1,0 +1,10 @@
+{
+  "name": "Packing",
+  "short_name": "Packing",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f4ef",
+  "theme_color": "#f7f4ef",
+  "icons": [{"src": "icon-180.png", "sizes": "180x180", "type": "image/png"}]
+}

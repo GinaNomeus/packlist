@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+# Real packing data never lives in this repo. It is kept in $PACK_DATA (default ~/packlist-data).
+data/
+packlist-data/
+*.local.yaml
+# Never commit data files, even if one is copied in by mistake.
+/trips/
+/lists/
+/source/
+/current.json
+.env
