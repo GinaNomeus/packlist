@@ -65,3 +65,12 @@ def test_split_keeps_place_and_flags(data):
     names = [i["name"] for i in store.load_trip()["people"][0]["sections"][1]["items"]]
     assert names == ["Tent + pegs", "Sleeping bag", "Head torch", "Chairs", "Table"]
     assert all(i.get("ask") for i in store.load_trip()["people"][0]["sections"][1]["items"][3:])
+
+
+def test_move_to_other_section_keeps_status(data):
+    main(["done", "dental kit"])
+    main(["move", "dental kit", "--to", "tent bag", "--before", "head torch"])
+    sam = store.load_trip()["people"][0]
+    assert [i["name"] for i in sam["sections"][1]["items"]][2] == "Dental kit"
+    assert sam["sections"][1]["items"][2]["status"] == "packed"
+    assert "Dental kit" not in [i["name"] for i in sam["sections"][2]["items"]]

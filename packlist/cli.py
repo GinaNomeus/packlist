@@ -157,6 +157,33 @@ def cmd_split(a):
     print(f"'{old['name']}' is now: " + ", ".join(it["name"] for it in new_items))
 
 
+def cmd_move(a):
+    """Move one item to another section (another bag), keeping its status."""
+
+    def change(trip):
+        rows = store.match(trip, a.item, a.person)
+        if len(rows) != 1:
+            names = ", ".join(r[2]["name"] for r in rows) or "nothing"
+            raise SystemExit(f"'{a.item}' must match exactly one item (it matches: {names}).")
+        person, old_section, item = rows[0]
+        targets = [s for s in person["sections"] if a.to.lower() in s["name"].lower()]
+        if len(targets) != 1:
+            names = ", ".join(s["name"] for s in targets) or "nothing"
+            raise SystemExit(f"'{a.to}' must match exactly one section of {person['name']} (it matches: {names}).")
+        target = targets[0]
+        old_section["items"].remove(item)
+        pos = len(target["items"])
+        if a.before:
+            hits = [i for i, it in enumerate(target["items"]) if a.before.lower() in it["name"].lower()]
+            if hits:
+                pos = hits[0]
+        target["items"].insert(pos, item)
+        return item, old_section, target
+
+    item, old, new = store.update(change, f"move: {a.item} -> {a.to}", a.trip)
+    print(f"Moved '{item['name']}' from '{old['name']}' to '{new['name']}'.")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="pack", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -192,6 +219,12 @@ def main(argv=None):
     p.add_argument("item", help="words matching exactly one item")
     p.add_argument("--into", nargs="+", required=True, help='the new item names, e.g. --into "Tent" "Pegs"')
     p.add_argument("--trip"); p.add_argument("--person"); p.set_defaults(fn=cmd_split)
+
+    p = sub.add_parser("move", help="move one item to another section (bag)")
+    p.add_argument("item", help="words matching exactly one item")
+    p.add_argument("--to", required=True, help="words matching the target section")
+    p.add_argument("--before", help="place it before the first item matching these words")
+    p.add_argument("--trip"); p.add_argument("--person"); p.set_defaults(fn=cmd_move)
 
     a = ap.parse_args(argv)
     a.fn(a)
