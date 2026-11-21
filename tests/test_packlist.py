@@ -58,3 +58,10 @@ def test_cli_done_skip_and_section(data, capsys):
     assert (c["packed"], c["skipped"]) == (4, 1)
     main(["undo", "head torch"])
     assert store.progress(store.load_trip())["packed"] == 3
+
+
+def test_split_keeps_place_and_flags(data):
+    main(["split", "camping chairs", "--into", "Chairs", "Table"])
+    names = [i["name"] for i in store.load_trip()["people"][0]["sections"][1]["items"]]
+    assert names == ["Tent + pegs", "Sleeping bag", "Head torch", "Chairs", "Table"]
+    assert all(i.get("ask") for i in store.load_trip()["people"][0]["sections"][1]["items"][3:])

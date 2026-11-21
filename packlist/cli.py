@@ -128,6 +128,35 @@ def _change(a, status):
     print(f"\n{len(rows)} item(s) marked {status}.")
 
 
+def cmd_split(a):
+    """Replace one item with several, in the same place, so each can be ticked off."""
+
+    def change(trip):
+        rows = store.match(trip, a.item, a.person)
+        if len(rows) != 1:
+            names = ", ".join(r[2]["name"] for r in rows) or "nothing"
+            raise SystemExit(f"'{a.item}' must match exactly one item (it matches: {names}).")
+        _, section, old = rows[0]
+        taken = {it["id"] for _, _, it in store.iter_items(trip)}
+        new_items = []
+        for name in a.into:
+            item = {"name": name, "status": TODO}
+            for key in ("ask", "new", "note"):
+                if key in old:
+                    item[key] = old[key]
+            item["id"] = old["id"].rsplit(".", 1)[0] + "." + slug(name)
+            while item["id"] in taken:
+                item["id"] += "-2"
+            taken.add(item["id"])
+            new_items.append(item)
+        i = section["items"].index(old)
+        section["items"][i:i + 1] = new_items
+        return old, new_items
+
+    old, new_items = store.update(change, f"split: {a.item}", a.trip)
+    print(f"'{old['name']}' is now: " + ", ".join(it["name"] for it in new_items))
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="pack", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -158,6 +187,11 @@ def main(argv=None):
         p.add_argument("--only-todo", action="store_true", help="leave items already decided alone")
         p.add_argument("-n", "--dry-run", action="store_true")
         p.set_defaults(fn=lambda a, s=status: _change(a, s))
+
+    p = sub.add_parser("split", help="turn one item into several, in the same place")
+    p.add_argument("item", help="words matching exactly one item")
+    p.add_argument("--into", nargs="+", required=True, help='the new item names, e.g. --into "Tent" "Pegs"')
+    p.add_argument("--trip"); p.add_argument("--person"); p.set_defaults(fn=cmd_split)
 
     a = ap.parse_args(argv)
     a.fn(a)
