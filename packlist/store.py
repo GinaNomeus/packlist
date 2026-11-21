@@ -36,13 +36,17 @@ def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
 
 
 def sync_down() -> None:
-    """Take the latest data from GitHub. The tool is the only writer on this
-    machine and pushes every change at once, so the local copy can follow the
-    remote exactly."""
+    """Take the latest data from GitHub, keeping any local commits on top.
+
+    Uncommitted edits are refused rather than overwritten."""
     if not is_git_repo():
         return
+    if git("status", "--porcelain").stdout.strip():
+        raise SystemExit(f"{data_dir()} has uncommitted changes; commit or discard them first.")
     git("fetch", "--quiet", "origin")
-    git("reset", "--quiet", "--hard", "@{upstream}")
+    if git("rebase", "--quiet", "@{upstream}", check=False).returncode != 0:
+        git("rebase", "--abort", check=False)
+        raise SystemExit("Local commits conflict with the newest data on GitHub; nothing was changed.")
 
 
 def sync_up(message: str) -> bool:
