@@ -67,6 +67,14 @@
               border: 1px solid var(--line); border-radius: 12px; background: var(--accent-soft); color: var(--accent);
               font-size: 15px; font-weight: 600; text-align: left; }
   .sec-done small { font-weight: 400; white-space: nowrap; margin-left: 8px; }
+  #sheet { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; z-index: 20; align-items: flex-end; }
+  #sheet.show { display: flex; }
+  .sheet-card { width: 100%; max-height: 80vh; overflow-y: auto; background: var(--bg); border-radius: 16px 16px 0 0;
+                padding: 12px 12px calc(env(safe-area-inset-bottom) + 12px); }
+  .sheet-title { font-weight: 600; padding: 6px 4px 10px; }
+  .sheet-card button { display: block; width: 100%; text-align: left; padding: 14px; margin-top: 6px; font-size: 17px;
+                       border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); }
+  .sheet-card button.cancel { text-align: center; color: var(--muted); margin-top: 12px; }
   #status { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 14px);
             background: var(--ink); color: #fff; border-radius: 18px; padding: 7px 14px; font-size: 14px; display: none; }
   #status.show { display: block; }
@@ -81,6 +89,7 @@
 </header>
 <main id="main"><div class="empty">Loading…</div></main>
 <div id="status"></div>
+<div id="sheet"></div>
 
 <script>
 // Packing checklist. The app is public; the data is not: trips live in a private
@@ -130,6 +139,7 @@ async function findTripPath() {
 
 // ---- changes ---------------------------------------------------------------
 function applyOp(t, op) {
+  if (op.move || op.rename) return applyEdit(t, op);
   for (const p of t.people) for (const s of p.sections) for (const it of s.items) {
     const hit = op.item === it.id ||
       (op.section && op.section[0] === p.name && op.section[1] === s.name && (it.status || "todo") === "todo");
@@ -138,17 +148,33 @@ function applyOp(t, op) {
     if (op.status === "todo") delete it.at; else it.at = op.at;
   }
 }
+// Move an item to another section of the same person (created if new), or rename it.
+function applyEdit(t, op) {
+  for (const p of t.people) for (const s of p.sections) {
+    const i = s.items.findIndex(it => it.id === (op.move || op.rename));
+    if (i < 0) continue;
+    if (op.rename) { s.items[i].name = op.name; return; }
+    let target = p.sections.find(x => x.name === op.to);
+    if (!target) { target = {name: op.to, items: []}; p.sections.push(target); }
+    if (target === s) return;
+    target.items.push(s.items.splice(i, 1)[0]);
+    return;
+  }
+}
 function act(op) { op.at = new Date().toISOString().slice(0, 19) + "+00:00";
   applyOp(trip, op); queue.push(op); saveLocal(); render(); sync(); }
 
 function describe(ops) {
   const names = [];
   for (const op of ops) {
+    if (op.move) { names.push(`moved to ${op.to}`); continue; }
+    if (op.rename) { names.push(`renamed to ${op.name}`); continue; }
     if (op.section) names.push(op.section[1]);
     else for (const p of trip.people) for (const s of p.sections) for (const it of s.items) if (it.id === op.item) names.push(it.name);
   }
   const s = names.slice(0, 3).join(", ") + (names.length > 3 ? ` +${names.length - 3}` : "");
-  return `Phone: ${ops[ops.length - 1].status} ${s}`;
+  const last = ops[ops.length - 1];
+  return `Phone: ${last.status || "edited"} ${s}`;
 }
 
 // Send waiting taps (on top of the newest version, so nothing from Claude is lost),
@@ -274,16 +300,60 @@ function render() {
         ? `<div class="actions"><button data-act="packed" data-id="${esc(it.id)}">Packed</button><button data-act="skipped" data-id="${esc(it.id)}">Not this time</button></div>` : "";
       html += `<div class="item ${st}" data-id="${esc(it.id)}"><div class="box">${st === "packed" ? "✓" : st === "skipped" ? "–" : ""}</div>` +
         `<div class="txt"><div class="name">${tags}${esc(it.name)}</div>${note}${subs}${actions}</div>` +
-        (st === "todo" && !it.ask ? `<button class="more" data-skip="${esc(it.id)}" aria-label="Not this time">⋯</button>` : "") + `</div>`;
+        `<button class="more" data-menu="${esc(it.id)}" aria-label="More">⋯</button></div>`;
     }
     html += "</div></section>";
   }
   $("main").innerHTML = html || '<div class="empty">Everything is packed 🎉</div>';
 }
 
+function findItem(id) {
+  for (const p of trip.people) for (const s of p.sections) for (const it of s.items) if (it.id === id) return {p, s, it};
+}
+function sheet(html) {
+  $("sheet").innerHTML = `<div class="sheet-card">${html}<button class="cancel" data-sheet="close">Cancel</button></div>`;
+  $("sheet").classList.add("show");
+}
+function closeSheet() { $("sheet").classList.remove("show"); $("sheet").innerHTML = ""; }
+function openMenu(id) {
+  const {s, it} = findItem(id), st = it.status || "todo";
+  sheet(`<div class="sheet-title">${esc(it.name)}</div>` +
+    (st === "skipped" ? `<button data-do="todo" data-id="${esc(id)}">Back on the list</button>`
+                      : `<button data-do="skipped" data-id="${esc(id)}">Not this time</button>`) +
+    `<button data-do="moveMenu" data-id="${esc(id)}">Move to another section…</button>` +
+    `<button data-do="rename" data-id="${esc(id)}">Rename…</button>`);
+}
+function moveMenu(id) {
+  const {p, s, it} = findItem(id);
+  sheet(`<div class="sheet-title">Move “${esc(it.name)}” to</div>` +
+    p.sections.filter(x => x !== s).map(x =>
+      `<button data-do="moveTo" data-id="${esc(id)}" data-to="${esc(x.name)}">${esc(x.name)}</button>`).join("") +
+    `<button data-do="moveNew" data-id="${esc(id)}">New section…</button>`);
+}
+function sheetAction(t) {
+  const id = t.dataset.id, d = t.dataset.do;
+  if (d === "moveMenu") return moveMenu(id);
+  closeSheet();
+  if (d === "todo" || d === "skipped") return act({item: id, status: d});
+  if (d === "moveTo") { act({move: id, to: t.dataset.to}); return toast(`Moved to ${t.dataset.to}`); }
+  if (d === "moveNew") {
+    const name = (prompt("Name of the new section:") || "").trim();
+    if (name) { act({move: id, to: name}); toast(`Moved to ${name}`); }
+    return;
+  }
+  if (d === "rename") {
+    const cur = findItem(id).it.name, name = (prompt("New name:", cur) || "").trim();
+    if (name && name !== cur) act({rename: id, name});
+  }
+}
+
 document.addEventListener("click", e => {
-  const t = e.target.closest("button, .item");
+  const t = e.target.closest("button, .item, #sheet");
   if (!t) return;
+  if (t.id === "sheet") return closeSheet();            // tap outside the card
+  if (t.dataset.sheet === "close") return closeSheet();
+  if (t.dataset.do) return sheetAction(t);
+  if (t.dataset.menu) return openMenu(t.dataset.menu);
   if (t.id === "setupBtn") return showSetup();
   if (!trip || t.id === "connect") return;
   if (t.dataset.tab !== undefined) { view.tab = +t.dataset.tab; saveLocal(); render(); scrollTo(0, 0); return; }
@@ -296,10 +366,6 @@ document.addEventListener("click", e => {
     return;
   }
   if (t.dataset.act) { act({item: t.dataset.id, status: t.dataset.act}); return; }
-  if (t.dataset.skip) {
-    if (confirm("Not needed on this trip?")) { act({item: t.dataset.skip, status: "skipped"}); toast("Marked: not this time"); }
-    return;
-  }
   if (t.classList.contains("item")) {
     const id = t.dataset.id;
     let cur = "todo";
