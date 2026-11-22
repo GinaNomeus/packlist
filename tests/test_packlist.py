@@ -74,3 +74,43 @@ def test_move_to_other_section_keeps_status(data):
     assert [i["name"] for i in sam["sections"][1]["items"]][2] == "Dental kit"
     assert sam["sections"][1]["items"][2]["status"] == "packed"
     assert "Dental kit" not in [i["name"] for i in sam["sections"][2]["items"]]
+
+
+def test_change_survives_a_phone_save_in_between(tmp_path, monkeypatch):
+    """The phone pushes while the CLI is saving: the CLI must redo its change on top."""
+    import subprocess
+
+    def run(*args, cwd):
+        subprocess.run(args, cwd=cwd, check=True, capture_output=True)
+
+    remote, data, phone = tmp_path / "remote.git", tmp_path / "data", tmp_path / "phone"
+    run("git", "init", "-q", "--bare", "-b", "main", str(remote), cwd=tmp_path)
+    run("git", "clone", "-q", str(remote), str(data), cwd=tmp_path)
+    for d in (data,):
+        run("git", "config", "user.email", "t@example.com", cwd=d); run("git", "config", "user.name", "t", cwd=d)
+    monkeypatch.setenv("PACK_DATA", str(data))
+    parsed = __import__("packlist.mdimport", fromlist=["x"]).parse_checklist(EXAMPLE.read_text())
+    store.write_json(data / "trips" / "camp.json", {"id": "camp", "title": "x", "people": parsed["people"], "rev": 0})
+    store.set_current_trip("camp")
+    run("git", "add", "-A", cwd=data); run("git", "commit", "-q", "-m", "start", cwd=data)
+    run("git", "push", "-q", "-u", "origin", "main", cwd=data)
+
+    real_sync_up, calls = store.sync_up, []
+
+    def phone_pushes_first(message):
+        if not calls:  # the phone saves just before our first push
+            calls.append(1)
+            run("git", "clone", "-q", str(remote), str(phone), cwd=tmp_path)
+            run("git", "config", "user.email", "p@example.com", cwd=phone); run("git", "config", "user.name", "p", cwd=phone)
+            t = json.loads((phone / "trips" / "camp.json").read_text())
+            t["people"][1]["sections"][0]["items"][0]["status"] = "packed"   # Favourite rabbit
+            (phone / "trips" / "camp.json").write_text(json.dumps(t, indent=1))
+            run("git", "commit", "-q", "-am", "phone", cwd=phone); run("git", "push", "-q", cwd=phone)
+        return real_sync_up(message)
+
+    monkeypatch.setattr(store, "sync_up", phone_pushes_first)
+    main(["done", "keys"])
+    store.sync_down()
+    t = store.load_trip()
+    assert t["people"][0]["sections"][0]["items"][0]["status"] == "packed"   # ours: Keys
+    assert t["people"][1]["sections"][0]["items"][0]["status"] == "packed"   # the phone's

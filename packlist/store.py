@@ -115,6 +115,10 @@ def update(change, message: str, trip_id: str | None = None, attempts: int = 4):
         save_trip(trip)
         if sync_up(message):
             return result
+        # GitHub moved on (e.g. a tap on the phone): drop this attempt and
+        # redo the change on top of the newest version.
+        if is_git_repo():
+            git("reset", "--quiet", "--hard", "HEAD~1")
     raise SystemExit("Could not save to GitHub (it kept changing, or there is no connection). Nothing was changed.")
 
 
