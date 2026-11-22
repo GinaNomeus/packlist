@@ -114,3 +114,10 @@ def test_change_survives_a_phone_save_in_between(tmp_path, monkeypatch):
     t = store.load_trip()
     assert t["people"][0]["sections"][0]["items"][0]["status"] == "packed"   # ours: Keys
     assert t["people"][1]["sections"][0]["items"][0]["status"] == "packed"   # the phone's
+
+
+def test_add_item_before_another(data):
+    main(["add", "Storybook", "--person", "juno", "--to", "night", "--before", "night light", "--note", "bedtime"])
+    night = store.load_trip()["people"][1]["sections"][1]["items"]
+    assert [i["name"] for i in night] == ["Travel cot", "Storybook", "Night light"]
+    assert night[1]["status"] == "todo" and night[1]["note"] == "bedtime"

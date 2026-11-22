@@ -192,6 +192,38 @@ def cmd_move(a):
     print(f"Moved '{item['name']}' from '{old['name']}' to '{new['name']}'.")
 
 
+def cmd_add(a):
+    """Add a new item to a section (at the end, or before a given item)."""
+
+    def change(trip):
+        people = [p for p in trip["people"] if p["name"].lower().startswith(a.person.lower())]
+        if len(people) != 1:
+            raise SystemExit(f"'{a.person}' must match exactly one person.")
+        person = people[0]
+        targets = [s for s in person["sections"] if a.to.lower() in s["name"].lower()]
+        if len(targets) != 1:
+            names = ", ".join(s["name"] for s in targets) or "nothing"
+            raise SystemExit(f"'{a.to}' must match exactly one section of {person['name']} (it matches: {names}).")
+        section = targets[0]
+        taken = {it["id"] for _, _, it in store.iter_items(trip)}
+        item_id = ".".join(slug(x) for x in (person["name"].split("(")[0], section["name"], a.name))
+        while item_id in taken:
+            item_id += "-2"
+        item = {"name": a.name, "status": TODO, "id": item_id}
+        if a.note:
+            item["note"] = a.note
+        pos = len(section["items"])
+        if a.before:
+            hits = [i for i, it in enumerate(section["items"]) if a.before.lower() in it["name"].lower()]
+            if hits:
+                pos = hits[0]
+        section["items"].insert(pos, item)
+        return person, section
+
+    person, section = store.update(change, f"add: {a.name}", a.trip)
+    print(f"Added '{a.name}' to {person['name']} · {section['name']}.")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="pack", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -235,6 +267,12 @@ def main(argv=None):
     p.add_argument("--new-section", choices=["first", "last"], help="create the section if it doesn't exist")
     p.add_argument("--decided", action="store_true", help="it's no longer a decide-for-this-trip item")
     p.add_argument("--trip"); p.add_argument("--person"); p.set_defaults(fn=cmd_move)
+
+    p = sub.add_parser("add", help="add a new item to a section")
+    p.add_argument("name"); p.add_argument("--person", required=True)
+    p.add_argument("--to", required=True, help="words matching the section")
+    p.add_argument("--before", help="place it before the first item matching these words")
+    p.add_argument("--note"); p.add_argument("--trip"); p.set_defaults(fn=cmd_add)
 
     a = ap.parse_args(argv)
     a.fn(a)
