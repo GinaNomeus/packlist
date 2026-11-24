@@ -121,3 +121,11 @@ def test_add_item_before_another(data):
     night = store.load_trip()["people"][1]["sections"][1]["items"]
     assert [i["name"] for i in night] == ["Travel cot", "Storybook", "Night light"]
     assert night[1]["status"] == "todo" and night[1]["note"] == "bedtime"
+
+
+def test_notes_and_lessons(data):
+    main(["note", "Book the campsite with shade"])
+    main(["note", "--lesson", "Bring a second tarp"])
+    t = store.load_trip()
+    assert t["notes"][0]["text"] == "Book the campsite with shade" and t["notes"][0]["at"]
+    assert t["lessons"] == ["Bring a second tarp"]

@@ -140,6 +140,11 @@ async function findTripPath() {
 // ---- changes ---------------------------------------------------------------
 function applyOp(t, op) {
   if (op.move || op.rename) return applyEdit(t, op);
+  if (op.note) {
+    t.notes = t.notes || [];
+    if (!t.notes.some(n => n.text === op.note && n.at === op.at)) t.notes.push({text: op.note, at: op.at});
+    return;
+  }
   for (const p of t.people) for (const s of p.sections) for (const it of s.items) {
     const hit = op.item === it.id ||
       (op.section && op.section[0] === p.name && op.section[1] === s.name && (it.status || "todo") === "todo");
@@ -167,6 +172,7 @@ function act(op) { op.at = new Date().toISOString().slice(0, 19) + "+00:00";
 function describe(ops) {
   const names = [];
   for (const op of ops) {
+    if (op.note) { names.push(`note: ${op.note.slice(0, 40)}`); continue; }
     if (op.move) { names.push(`moved to ${op.to}`); continue; }
     if (op.rename) { names.push(`renamed to ${op.name}`); continue; }
     if (op.section) names.push(op.section[1]);
@@ -174,7 +180,7 @@ function describe(ops) {
   }
   const s = names.slice(0, 3).join(", ") + (names.length > 3 ? ` +${names.length - 3}` : "");
   const last = ops[ops.length - 1];
-  return `Phone: ${last.status || "edited"} ${s}`;
+  return `Phone: ${last.note ? "added" : last.status || "edited"} ${s}`;
 }
 
 // Send waiting taps (on top of the newest version, so nothing from Claude is lost),
@@ -254,7 +260,8 @@ function render() {
   renderSync();
   if (!trip) return;
   $("title").textContent = trip.title;
-  const tabs = trip.people.map(p => p.name).concat(trip.left_out && trip.left_out.length ? ["Left out"] : []);
+  const tabs = trip.people.map(p => p.name).concat(["Notes"], trip.left_out && trip.left_out.length ? ["Left out"] : []);
+  const notesTab = trip.people.length;
   if (view.tab >= tabs.length) view.tab = 0;
   $("tabs").innerHTML = tabs.map((t, i) => {
     let label = esc(t);
@@ -266,7 +273,19 @@ function render() {
   $("count").textContent = `${all.packed} packed · ${all.todo} left`;
   $("leftBtn").classList.toggle("on", view.onlyLeft);
 
-  if (view.tab >= trip.people.length) {
+  if (view.tab === notesTab) {
+    const lessons = (trip.lessons || []).map(l => `<li>${esc(l)}</li>`).join("");
+    const notes = (trip.notes || []).map(n => `<li>${esc(n.text)}<small> · ${esc((n.at || "").slice(0, 10))}</small></li>`).join("");
+    $("main").innerHTML =
+      '<section><div class="sec-head"><h2>Lessons for this trip</h2></div><div class="card" style="padding:4px 16px">' +
+      (lessons ? `<ul class="leftout">${lessons}</ul>` : '<p class="note">None yet.</p>') + '</div></section>' +
+      '<section><div class="sec-head"><h2>Notes from this trip</h2><button id="addNote">+ Add a note</button></div>' +
+      '<div class="card" style="padding:4px 16px">' +
+      (notes ? `<ul class="leftout">${notes}</ul>` : '<p class="note">Anything you learn on this trip: what to bring next time, what to book, what to skip.</p>') +
+      '</div></section>';
+    return;
+  }
+  if (view.tab > notesTab) {
     $("main").innerHTML = '<section><div class="sec-head"><h2>Not on this trip</h2></div><div class="card" style="padding:4px 16px">' +
       '<ul class="leftout">' + trip.left_out.map(l => `<li>${esc(l)}</li>`).join("") + "</ul></div></section>" +
       '<p class="foot"><button id="setupBtn">Data connection</button></p>';
@@ -355,6 +374,11 @@ document.addEventListener("click", e => {
   if (t.dataset.do) return sheetAction(t);
   if (t.dataset.menu) return openMenu(t.dataset.menu);
   if (t.id === "setupBtn") return showSetup();
+  if (t.id === "addNote") {
+    const text = (prompt("Note for next time:") || "").trim();
+    if (text) { act({note: text}); toast("Note saved"); }
+    return;
+  }
   if (!trip || t.id === "connect") return;
   if (t.dataset.tab !== undefined) { view.tab = +t.dataset.tab; saveLocal(); render(); scrollTo(0, 0); return; }
   if (t.id === "leftBtn") { view.onlyLeft = !view.onlyLeft; saveLocal(); render(); return; }

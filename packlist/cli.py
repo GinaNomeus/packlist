@@ -224,6 +224,19 @@ def cmd_add(a):
     print(f"Added '{a.name}' to {person['name']} · {section['name']}.")
 
 
+def cmd_note(a):
+    """Add a note to the trip, or with --lesson, to the lessons shown for this trip."""
+
+    def change(trip):
+        if a.lesson:
+            trip.setdefault("lessons", []).append(a.text)
+        else:
+            trip.setdefault("notes", []).append({"text": a.text, "at": store.now()})
+
+    store.update(change, f"{'lesson' if a.lesson else 'note'}: {a.text[:50]}", a.trip)
+    print(f"Saved as a {'lesson for this trip' if a.lesson else 'note from this trip'}.")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="pack", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -273,6 +286,10 @@ def main(argv=None):
     p.add_argument("--to", required=True, help="words matching the section")
     p.add_argument("--before", help="place it before the first item matching these words")
     p.add_argument("--note"); p.add_argument("--trip"); p.set_defaults(fn=cmd_add)
+
+    p = sub.add_parser("note", help="add a note from this trip (or --lesson: a lesson shown for it)")
+    p.add_argument("text"); p.add_argument("--lesson", action="store_true")
+    p.add_argument("--trip"); p.set_defaults(fn=cmd_note)
 
     a = ap.parse_args(argv)
     a.fn(a)
